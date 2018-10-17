@@ -11,45 +11,61 @@ function j_template(junjie){
 	var label=junjie.LABEL;
 	// ---> 取值域
 	var field=junjie.JSONS;
-	// ---> 改变属性值
-	var attr=j.getattr_eval(label,"j-attr");
-	// ---> 
-	if(attr){
-		//---> 是否优先处理
-		if(attr.first===true){
-			j.attr(label,attr,field);
-			j.domain(label,field);
-		}else{
-			j.domain(label,field);
-			j.attr(label,attr,field);
+	try {
+		for (var i = 0; i < label.attributes.length; i++) {
+			var value=label.attributes[i].value;
+			if(label.attributes[i].name=="j-exit"||(!j._undefined(value))){
+				 return;
+			}
+			switch (label.attributes[i].name) {
+				case "j-attr":
+					j.attr(label,field,value);break;
+				case "j-json":
+					j.domain(label,field);break;
+	            case "j-t":
+	            case "j-text":
+	            case "j-k":
+	            case "j-key":
+		            j.text(label,field[value]);break;
+	            case "j-v":
+	            case "j-value":
+	            case "name":
+	            	j.value(label,field[value]);break;	
+	            case "j-t-s":  
+	            case "j-time-stamp":
+	            	j.timeStamp(label,field,value);break;
+	            case "j-h":
+	            case "j-href":
+	            	j.href(label,field,value);break;
+	            case "j-s":
+	            case "j-src":
+	            	j.src(label,field,value);break;
+	            case "j-n":
+	            case "j-number":
+	            	j.number(label,field,value);break;
+	            case "j-arr":
+	            	j.arrays(label,field,value);break;
+	            case "j-k-v-p":
+	            case "j-map":
+	            case "j-key-value-pair":
+	            	j.map(label,field,value);break;
+	            case "j-select":
+	            	j.select(label,field,value);break;
+	            case "j-title":
+	            	j.title(label,field[value]);break;
+	            case "j-thml":
+	            	j.thml(label,field[value]);break;
+	            case "j-f":
+	            case "j-for":
+	            case "j-loop":
+	            	j.loop(label,field,value);return;
+		    }
+			//---> 放大最后,若是循环,他是不会执行以后的操作的
+			j.recursion(label,field);	
 		}
-	}else{
-		j.domain(label,field);
+	} catch (e) {
+		console.error("en:Rendering error ;Automatically skips errors and continues to process backwards. zh:渲染错误;自动跳过错误继续向后处理 ;E->"+e);
 	}
-	// ---> 文本值 设置文本值 
-	j.text(label,field);
-	// ---> value值
-	j.value(label,field);
-	// ---> 设置时间
-	j.timeStamp(label,field);
-	// ---> 设置路径
-	j.href(label,field);
-	// ---> 设置src 资源路径
-	j.src(label,field);
-	// ---> 数字
-	j.number(label,field);
-	// ---> 数组
-	j.arrays(label,field);
-	// ---> 集合
-	j.map(label,field);
-	// ---> 下拉选择
-	j.select(label,field);
-	// ---> 提示
-	j.title(label,field);
-	// ---> 递归
-	j.recursion(label,field);
-	// ---> 循环
-	j.loop(label,field);
 }
 /**
  * 工具 
@@ -244,24 +260,39 @@ var j={
 	 * @param field 取值域
 	 */
 	text:function(){
-		var t=getattr(arguments[0],"j-t","j-text","j-k","j-key");
-		if(t)arguments[0].innerText=arguments[1][t];
+		if(_undefined(arguments[1]))arguments[0].innerText=arguments[1];
+	},
+	/**
+	 * 非 未定义
+	 */
+	_undefined:function(v){
+		return typeof(v)!="undefined";
 	},
 	/**
 	 * 设置标签的value值
 	 * @param label 标签
 	 * @param field 取值域
 	 */
-	value:function(label,field){
-		var v=getattr(label,"j-v","j-value","name");
-		if(v){
-			switch (label.tagname) {
+	value:function(){
+		if(_undefined(arguments[1])){
+			switch (arguments[0].tagname) {
 			case "INPUT":
-				//---> 处理按钮类型
+				switch (arguments[0].type) {
+				case "text":
+				case "butt":
+					arguments[0].value=arguments[1];
+				break;
+
+				default:
+					break;
+				}
+				break;
+			case "BUTTON":
+				arguments[0].value=arguments[1];
 				break;
 			default:
-				label.innerText=field[v];
-				break;
+				arguments[0].innerText=arguments[1];
+			break;
 			}
 		}
 	},
@@ -269,18 +300,154 @@ var j={
 	 * 设置标签文本值的时间 
 	 */
 	timeStamp:function(){
-		//--> 时间戳 j-time-stamp->{time:kye,format:{时间格式}}
-		var t=getattr_eval(arguments[0],"j-t-s","j-time-stamp");
-		if(t){
-			arguments[0].innerText=new Date(arguments[1][t.time]).format(_isE(j.format)?j.format:"yyyy-MM-dd hh:mm:ss");
+		//--> 时间戳 j-time-stamp->{time:kye,format:{时间格式},today:{???}}
+		var t=eval("("+arguments[2]+")");
+		if(t)arguments[0].innerText=theNearFuture(arguments[1][t.time],t);
+	},
+	/**
+	 * @param timeStamp 时间戳
+	 * @param 显示的格式
+	 * {time:kye,format:{时间格式},
+	 * second:需要检测时间间隔(在多少秒直接),
+	 * lately:{
+	 * 	today:表示今天的字
+	 * 	tomorrow:表示明天的字
+	 * 	yesterday:表示昨天的字
+	 *  thisMonth:表示今月的字
+	 *  thisYear:表示今年的字
+	 *  now:表示(现在|刚刚)的字
+	 *  minute:表示分钟的字
+	 *  hour:表示小时的字
+	 *  day:表示日期的单位 zh:(天)
+	 *  month:表示月的词
+	 *  year:表示年的词
+	 *  front:在这个时间之前的字
+	 *  behind:在这个时间之后的字
+	 *  am:表示午前的字
+	 *  pm:表示午后的字
+	 *  A: 语气词 ,zh:的
+	 *  branch:分,不是分钟
+	 *  time:时,不是小时
+	 * }
+	 * }
+	 * 有一些变量未使用,可能会在不久后使用
+	 */
+	theNearFuture:function(timeStamp,t){
+		var nowTime=new Date();  
+		var when=new Date(timeStamp);
+		var time_difference=nowTime.getTime()-when.getTime();
+		if(( typeof(t.lately) !="undefined")&&(time_difference<0?(-time_difference)/1000:time_difference/1000)<=((!t.second)?(2*24*60*60):(t.second))){
+			var today,tomorrow,yesterday,thisMonth,thisYear;// 今天,明天,昨天,本月,今年
+			var now,minute,hour,branch,time;//现在,分钟,小时,分,时
+			var day,month,year;//天,月,年
+			var front,behind;//前面,后面
+			var am,pm;//上午,下午
+			var A;
+			if(t.lately===true){
+				//-->国际化,获取html5 上的语言标记,请遵从w3c 的 lang 网页的语言 规定,这需要我们一起完成
+				var lang=j.getattr(window.document.getElementsByTagName("html")[0],"lang");
+				switch (lang) {
+				case "zh":
+					t.lately={today:"今天",tomorrow:"明天",yesterday:"昨天",thisMonth:"本月",thisYear:"今年",now:"刚刚",minute:"分钟",hour:"小时",day:"天",month:"月",year:"年",front:"前",behind:"后",am:"上午",pm:"下午",A:"的",time:"点",branch:"分"};
+					break;
+				default:
+					//---> 这是作者用翻译制成的,若你的语言结构很好,那么请麻烦你更改一下这些单词
+					t.lately={today:"today",tomorrow:"tomorrow",yesterday:"yesterday",thisMonth:"thisMonth",thisYear:"thisYear",now:"now",minute:"minute",hour:"hour",day:"day",month:"month",year:"year",front:"front",behind:"behind",am:"AM",pm:"PM",A:" a ",time:"time",branch:"branch"};
+					break;
+				}
+			}
+			{
+				{
+					today=t.lately.today;
+					tomorrow=t.lately.tomorrow;
+					yesterday=t.lately.yesterday;
+					thisYear=t.lately.thisYear;
+					thisMonth=t.lately.thisMonth;
+				}
+				{
+					now=t.lately.now;
+					minute=t.lately.minute;
+					hour=t.lately.hour;
+					branch=t.lately.branch;
+					time=t.lately.time;
+				}
+				{
+					day=t.lately.day;
+					month=t.lately.month;
+					year=t.lately.year;
+				}
+				{
+					front=t.lately.front;
+					behind=t.lately.behind;
+				}
+				{
+					am=t.lately.am;
+					pm=t.lately.pm;
+				}
+				{
+					A=t.lately.A;
+				}
+			}
+			//-->那天 -上下 午 -多久  前后
+			var thatDay,ampm ,howLong,around;
+			
+			if(time_difference>=0){
+				if(time_difference<=60000){
+					return now;
+				}
+				else{
+					around=front;
+				}
+			}
+			else{
+				around=behind;
+				time_difference=-time_difference;
+			}
+			//上午还是下午
+			ampm=(when.getHours()>12?pm:am)+(when.getHours()>12?when.getHours()-12:when.getHours())+time+when.getMinutes()+branch;
+			//---> 年?
+			if(nowTime.getFullYear()!=when.getFullYear()){
+				//--> 不是同一年
+				return front+year+A+(when.getMonth()+1)+month+when.getDate()+day+ampm;
+			}
+			else if(nowTime.getMonth()!=when.getMonth()) {
+				//-->当前的月大于指定时间的月
+				return thisYear+(when.getMonth()+1) +A+ when.getDate()+day+ampm;
+			}
+			else if(nowTime.getDate()!=when.getDate()){
+				//--->是否是昨天和明天
+				var _day=nowTime.getDate()-when.getDate();
+				if(_day==1||_day==-1){
+					return (_day==1?yesterday:tomorrow)+ampm;
+				}
+				//-->本月
+				return (_day<0?-_day:_day)+day+A+around+ampm;
+			}
+			else {
+				//-->今天
+				if(time_difference<=4*3600*1000){
+					//--->4小时内
+					var _timeDate=new Date(time_difference)
+					if(time_difference<60*60*1000){
+						//---> 59分钟内
+						return _timeDate.getMinutes()+minute+around;
+					}
+					//--> +-3
+					var _timeDate=new Date(time_difference)
+					return (_timeDate.getUTCHours())+hour+_timeDate.getMinutes()+minute+around;
+				}else{
+					return today+ampm;
+				}
+			}
 		}
+		return new Date(timeStamp).format(j._isE(t.format)?t.format:"yyyy-MM-dd hh:mm:ss");
 	},
 	/**
 	 * 设置超链接
 	 */
 	href:function(){
 		//--> 超链接 j-href->{href:路径键值,top:路径默认的顶部,para:{路径名:取值键值}} ;para 可以使用数组 ["键值","键值"]
-		var h=getattr_eval(arguments[0],"j-h","j-href");
+		var h=eval("("+arguments[2]+")");
 		if(h){
 			var _href="";
 			if(h.top)_href+=h.top;
@@ -300,10 +467,11 @@ var j={
 	},
 	/**
 	 * 设置资源路径
+	 * {buffer:(压缩图地址),top:(http/s 开头的地址),src:(资源路径的key值),suffix:(图片后缀),format:(图像格式),lazyload:(是否启动懒加载,j-lazyload)}
 	 */
 	src:function(){
 		//--> src路径 {buffer:(默认图片地址),top:"默认头部",src:路径kye,suffix:资源后缀'png|.png',format:资源格式"[500*600]"}
-		var s=getattr_eval(arguments[0],"j-s","j-src");
+		var s=eval("("+arguments[2]+")")
 		if(s){
 			var _src="";
 			if(s.top)_src+=s.top;
@@ -346,7 +514,7 @@ var j={
 	 * 设置数字
 	 */
 	number:function(){
-		var n=getattr_eval(label,"j-n","j-number");
+		var n=eval("("+arguments[2]+")")
 		//--> 数字 {number:key,format:{retain,rounding,hexadecimal,scm,interval,fill}}
 		if(n){
 			var num=arguments[1][n.number];
@@ -359,7 +527,7 @@ var j={
 	 */
 	arrays:function(){
 		//--> 数组 {arr:['数组','数组'],i:(数组下标)key}
-		var a=j.getattr_eval(arguments[0],"j-arr");
+		var a=eval("("+arguments[2]+")")
 		if(a&&_isE(a.arr)&&_isE(a.i)){
 			arguments[0].innerText=a.arr[arguments[1][a.i]];
 		}
@@ -369,7 +537,7 @@ var j={
 	 */
 	map:function(){
 		//--> 集合 {map:{k:v,k:v},k:key}
-		var m=j.getattr_eval(arguments[0],"j-k-v-p","j-key-value-pair");
+		var m=eval("("+arguments[2]+")");
 		if(isEE(true,m,m.map,m.k)){
 			arguments[0].innerText=m.map[arguments[1][m.k]];
 		}
@@ -379,7 +547,7 @@ var j={
 	 */
 	select:function(){
 		//--> 下拉选择 {select:key,type:map|kv,def(默认选择):d,empty(是否清空):true}
-		var s=j.getattr_eval(arguments[0],"j-select");
+		var s=eval("("+arguments[2]+")");
 		if(isEE(true,s,s.select)){
 			if(s.empty){
 				arguments[0].innerHtml="";
@@ -419,17 +587,15 @@ var j={
 	 * 提示
 	 */
 	title:function(){
-		var t=getattr(label,"j.title");
-		if(t)arguments[0].title=arguments[1][t];
+		if(_undefined(arguments[1]))arguments[0].title=arguments[1];
 	},
 	/**
 	 * 设置html 值
+	 *  这个替换HTML,直接替换不会进行保留
 	 */
 	thml:function(){
-		//--> 这个替换HTML,直接替换不会进行保留
-		var h=getattr(arguments[0],"j-thml");
-		if(h){
-			var div=document.createElement("div").innerHtml=arguments[1][h];
+		if(_undefined(document[1])){
+			var div=document.createElement("div").innerHtml=arguments[1];
 			document[0].innerHtml=div.innerHtml;
 		}
 	},
@@ -438,12 +604,12 @@ var j={
 	 */
 	loop:function(){
 		//--> 循环 {for:key,mould:(循环模型)在数据模板中的键,empty:(清空)true,class:[i,"className",i++,"className"]}
-		var l=getattr_eval(label,"j-f","j-for","j-loop");
+		var l=eval("("+document[2]+")");
 		if(isEE(l,l["for"],l.mould)){
 			// ---> 限制取值的范围
 			var range=document[1][l["for"]];
 			if(isE(range)){
-				console.warn("en:json Unavailable , Please check the correct key ["+l["for"]+"]. ch: json数据不可用,请检查取值["+l["for"]+"]")
+				console.warn("en:json Unavailable , Please check the correct key ["+l["for"]+"]. zh: json数据不可用,请检查取值["+l["for"]+"]")
 			}
 			//---> 获取模型
 			var rendering;
@@ -454,7 +620,7 @@ var j={
 				}
 			}
 			if(isE(rendering)){
-				console.warn("en: Can't find ["+l.mould+"]mould \t ch: 找不到["+l.mould+"]这模型");
+				console.warn("en: Can't find ["+l.mould+"]mould \t zh: 找不到["+l.mould+"]这模型");
 			}else{
 				var timeElement;
 				for (var i = 0; i < range.length; i++) {
@@ -484,7 +650,7 @@ var j={
 		var j=j.getattr(document[0],"j-json");
 		if(j)document[1]=document[1][j];
 	},
-	attr:function(label,a,field){
+	attr:function(label,field,a){
 		// ---> 属性 {first:false,attrs:[{label:id,attr:name,arr:{index:k,value:key,split:"?"},map:{key:name,value:v}},{~}]}
 		if(a.attrs){
 			for (var i = 0; i < a.attrs.length; i++) {
@@ -529,9 +695,7 @@ var j={
 
 /**
  * 时间格式化
- * 
- * @param fmt
- *            你期待格式
+ * @param fmt 你期待格式
  */
 Date.prototype.format = function(fmt) {
 	var o = {
