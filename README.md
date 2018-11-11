@@ -12,3 +12,6 @@ It is mainly used for rendering data in HTML.
 It supports JSON data, and it is still unfinished.
 I would be delighted if you would like to improve it together.
 This is my mailbox: 17749922376@163.com.
+
+
+现在它（J-templplate）在投入使用，若你需要，请下载未压缩的
