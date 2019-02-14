@@ -4,10 +4,11 @@
  * field   :json 值
  * empty   : {
  *	tv  :是否清除 元素以前的值
- *	attr:是否清除节点属性的值 
+ *	attr:是否清除节点属性的值
  * 			}
  * new j_template({element:?,field:?,empty:{tv:false,attr:false}});
- * 
+ *
+ *弃用: 由于采用的事 eval 函数解析, 这是威胁的,请升级到最新的版本 2.0
  */
 function j_template(junjie){
 	var label=junjie.element;
@@ -24,21 +25,25 @@ function j_template(junjie){
 		var RemoveAttribute=new Array();
 		for (i=0; i < label.attributes.length; i++) {
 			var value=label.attributes[i].value;
-			if(!j._undefined(value)){
-				continue;
+			if(!j._undefined(value)||label.attributes[i].name.indexOf("j-")==-1){
+				if(label.attributes[i].name!="name"){
+					continue;
+				}
 			}
 			switch (label.attributes[i].name) {
 				case "j-attr":j.attr(label,field,value);break;
-				case "j-json":j.domain(label,field);break;
+				case "j-json":field=j.domain(label,field);break;
 	            case "j-t":
 	            case "j-text":
 	            case "j-k":
-	            case "j-key":j.emptytv(label,junjie.empty);j.text(label,field[value]);break;
+	            case "j-key":j.emptytv(label,junjie.empty);
+	            	if(typeof(field) =="string" ){j.text(label,field);}
+	            	else{j.text(label,field[value]);}
+	            break;
 	            case "j-v":
-	            case "j-value":
-	            case "name":j.emptytv(label,junjie.empty);j.value(label,field[value]);break;	
+	            case "j-value":j.value(label,field[value]);break;
 	            case "j-name":j.valueName(label,field[value],value);break;
-	            case "j-t-s":  
+	            case "j-t-s":
 	            case "j-time-stamp":j.emptytv(label,junjie.empty);j.timeStamp(label,field,value);break;
 	            case "j-h":
 	            case "j-href":j.href(label,field,value);break;
@@ -51,16 +56,20 @@ function j_template(junjie){
 	            case "j-map":
 	            case "j-key-value-pair":j.map(label,field,value);break;
 	            case "j-select":j.select(label,field,value);break;
+	            case "j-select-name":j.selectName(label,field,value);break;
 	            case "j-title":j.title(label,field[value]);break;
-	            case "j-thml":j.thml(label,field[value]);break;
+	            case "j-html":j.html(label,field[value]);break;
 	            case "j-switch":j.switchCase(label,field[value]);break;
 	            case "j-attr-add":j.attrAdd(label,value,field);break;
 	            case "j-attrs":j.attrSArr(label,value,field);break;
 	            case "j-if":j.equal(label,value,field);break;
+	            case "j-show-hide":j.showHide(label,field,value); break;
+	            case "j-reduction-json":field=junjie.field; break;
 	            case "j-f":
 	            case "j-for":
 	            case "j-loop":
 	            	j.loop(label,field,value);junjie.empty=empty;return;
+	            case "j-serial":j.serial(label,field,value);break;
 	            case "j-case":
 	            case "j-model":
 	            	break;
@@ -95,13 +104,13 @@ var j={
 	containerMap:{},
 	/**
 	 * 添加元素,并存放到集合中
-	 * 
+	 *
 	 */
 	put:function(key,value,del){
 		if(typeof(value)=="string"){
 			var div=document.createElement("div");
 			div.innerHTML=value;
-			value=div;
+			value=div.children[0];
 		}
 		key=new String(key).toString();
 		// --> 存在则替换
@@ -116,7 +125,7 @@ var j={
 			j.container[j.containerMap[key]]=value.cloneNode(true);
 		}
 		if(del===true){
-			value.parentNode.removeChild(value);    
+			value.parentNode.removeChild(value);
 		}
 	},
 	/**
@@ -149,10 +158,15 @@ var j={
 	 * [属性名和json域的key 一致]
 	 * 不支持混淆
 	 * 这是为了 比较多属性二使用,改属性值支持一级,不支持复杂的 数组,或者map,
-	 * 
+	 *
 	 */
 	attrSArr:function(label,value,field){
-		var attrs=eval("("+value+")");
+		var attrs;
+		try {
+			attrs=JSON.parse(value);
+		} catch (e) {
+			attrs=eval("("+value+")");
+		}
 		//---> 是数组还是键值对
 		if(attrs instanceof Array){
 			//--> 数组
@@ -257,7 +271,7 @@ var j={
 	/**
 	 * 若值不可用则返回true<br> "" --> true null --> true undefined --> true .length=0
 	 * --> true " " --> false other --> false
-	 * 
+	 *
 	 * @param value
 	 */
 	 isE:function(value){
@@ -290,7 +304,7 @@ var j={
 	},
 	/**
 	 * 获取元素的属性
-	 * 
+	 *
 	 * @param label
 	 *            元素,这是 document 对象
 	 * @param arguments
@@ -320,7 +334,7 @@ var j={
 	 * @param label
 	 *            标签
 	 */
-	src404:function(label){  
+	src404:function(label){
 		// ---> 有没有默认的地址?
 		if(j._isE(j.src_404)){
 			label.src=j.src_404;
@@ -330,14 +344,19 @@ var j={
 	},
 	/**
 	 * 数字格式化
-	 * 
+	 *
 	 * @param num
 	 *            数字
 	 * @param format{
-	 *            retain:保留几位; rounding:舍入,这是指定位数来舍入,大于就进位; hexadecimal: 显示进制
-	 *            Number.toString(hexadecimal); scm:科学计数法,若为二进制那么这个就无效,
-	 *            interval:显示格式 fill:位数不够0填充 栗子>>> 保留3位,4舍4+1入,->v以16进制显示
-	 *            |以科学计数法显示 | -> interval: 每隔4个加上一个 ' '(空格),
+	 *            retain:保留几位; rounding:舍入,这是指定位数来舍入,大于就进位; 
+	 *            hexadecimal: 显示进制
+	 *            Number.toString(hexadecimal); 
+	 *            scm:科学计数法,若为二进制那么这个就无效,
+	 *            interval:显示格式 
+	 *            fill:位数不够0填充 栗子>>> 保留3位,4舍4+1入,->v以16进制显示
+	 *            |以科学计数法显示 | -> 
+	 *            interval: 每隔4个加上一个 ' '(空格),
+	 *            
 	 *            j.number("12355.55666"|12355.55666,{retain:3,rounding:4,hexadecimal:16|scm:true,interval:[4,'
 	 *            '],fill:0}); 栗子 print>>> : 3043.8e978d4fe }
 	 * @return 返回指定个数的数字 "字符串"
@@ -393,7 +412,7 @@ var j={
 			}
 		}
 		// ---> 格式化
-		if(format.interval&& (typeof format.scm !="undefined")){
+		if(format.interval){
 			var str = timeNum;
 			num ="";
 			while (str.length > format.interval[0]) {
@@ -447,7 +466,7 @@ var j={
 	},
 	/**
 	 * 设置文本值
-	 * 
+	 *
 	 * @param label
 	 *            标签
 	 * @param field
@@ -458,24 +477,57 @@ var j={
 	},
 	/**
 	 * 只有结果为 false 是 才会删除
+	 * {key: json 中的值,eq: 比较值,re:是否取反}
 	 */
 	equal:function(label,value,field){
 		var i=eval("("+value+")");
 		if(i){
 			var value=field[i.key];
 			var del=value;
-			if(i.eq){
-				//--> 先比较 == ,若不一致,在 域中取值比较
-				if(i.eq==value||value==field[i.eq]){del=true;}
-				else {del=false;}
+			//--> 先比较 == ,若不一致,在 域中取值比较
+			if(i.eq==value){
+				del=true;
+			}else if(i.eq != undefined && i.eq != null &&value==field[i.eq]){
+				del=true;
+			}else{
+				del=false;
 			}
 			if(i.re===true){
-				if(del===true||del=="true"){del=false;}
-				else if(del===false||del=="false"){del=true;}
-				else if(del){del=!del;}
+				del=!del;
 			}
-			if(del===false||del=="false"){
+			if(del===false){
 				label.parentNode.removeChild(label);
+			}
+		}
+	},
+	/**
+	 * 是否隐藏,条件为true 则隐藏
+	 * "{key:'childrens',judge:'not',how:'length',contrast:'0'}"
+	 */
+	showHide:function(label,field,value){
+		var sh=eval("("+value+")");
+		if(sh){
+			var key=field;
+			if(sh.key){key=field[sh.key];}
+			var ju=key;
+			if(sh.how){ju=key[sh.how];}
+			var bool;
+			switch (sh.judge) {
+			case "not":
+				bool= (ju!=sh.contrast);
+				break;
+			case "eq":
+				bool= (ju==sh.contrast);
+				break;
+			default:
+				bool=ju;
+				break;
+			}
+			
+			if(bool=="true"||bool===true){
+				label.setAttribute("hidden","true");
+			}else{
+				label.removeAttribute("hidden");
 			}
 		}
 	},
@@ -487,7 +539,7 @@ var j={
 	},
 	/**
 	 * 设置标签的value值
-	 * 
+	 *
 	 * @param label
 	 *            标签
 	 * @param field
@@ -495,20 +547,35 @@ var j={
 	 */
 	value:function(){
 		if(j._undefined(arguments[1])){
+			if(arguments[1]==null||arguments[1]=="null"){arguments[1]="";}
 			switch (arguments[0].tagName) {
 			case "INPUT":
 				switch (arguments[0].type) {
 				case "text":
 				case "butt":
 				case "image":
+				case "number":
+				case "email":
+				case "tel":
 					arguments[0].setAttribute("value",arguments[1]);
 				break;
 				case "checkbox":
-					if(!arguments[1]){
-						arguments[0].removeAttribute("checked");
-					}else{arguments[0].setAttribute("checked","checked");}
-				break;
-				
+					if(!arguments[1]){arguments[0].removeAttribute("checked");}
+					else{arguments[0].setAttribute("checked","checked");}break;
+				case "radio":
+					if(arguments[0].value==arguments[1]){arguments[0].setAttribute("checked","checked");}break;
+				case "date":
+					if(arguments[1]==""){break;}
+					try {arguments[0].value = new Date(arguments[1]).format("yyyy-MM-dd");}
+					catch (e) {arguments[0].value = value;}break;
+				case "datetime-local":
+					if(arguments[1]==""){break;}
+					try {arguments[0].value = new Date(arguments[1]).format("yyyy-MM-ddThh:mm");} 
+					catch (e) {arguments[0].value = value;}break;
+				case "datetime":
+					if(arguments[1]==""){break;}
+					try {arguments[0].value = new Date(arguments[1]).format("yyyy-MM-ddThh:mm");}
+					catch (e) {arguments[0].value = value;}break;
 				default:
 					break;
 				}
@@ -544,7 +611,7 @@ var j={
 	 *            branch:分,不是分钟 time:时,不是小时 } } 有一些变量未使用,可能会在不久后使用
 	 */
 	theNearFuture:function(timeStamp,t){
-		var nowTime=new Date();  
+		var nowTime=new Date();
 		var when=new Date(timeStamp);
 		var time_difference=nowTime.getTime()-when.getTime();
 		if(( typeof(t.lately) !="undefined")&&(time_difference<0?(-time_difference)/1000:time_difference/1000)<=((!t.second)?(2*24*60*60):(t.second))){
@@ -601,7 +668,7 @@ var j={
 			}
 			// -->那天 -上下 午 -多久 前后
 			var thatDay,ampm ,howLong,around;
-			
+
 			if(time_difference>=0){
 				if(time_difference<=60000){
 					return now;
@@ -675,12 +742,14 @@ var j={
 				if(_h){
 					_href+=_h;
 				}else{
-					throw "没有在 json数据中找到 ["+h.href+"] 的value值";
+					console.warn("没有在 json数据中找到 ["+h.href+"] 的value值");
 				}
+			}else if(h.href==''){
+				_href+=arguments[1];
 			}
+			if(_href.indexOf('?')==-1)_href+="?";// --->判断路径是否已经有过参数? 若没有则加上问号
 			//-->是否有参数
 			if(h.para){
-				if(_href.indexOf('?')==-1)_href+="?";// --->判断路径是否已经有过参数? 若没有则加上问号
 				//是否为数组
 				var _para ="";
 				var v="";
@@ -688,7 +757,7 @@ var j={
 					for (var i = 0; i < h.para.length;i++) {
 						v=arguments[1][h.para[i]];
 						if(v){
-							_para+=(h.para+"="+v+"&");	
+							_para+=(h.para+"="+v+"&");
 						}
 					}
 				}else{
@@ -710,8 +779,13 @@ var j={
 			         }
 				}
 			}
+			
 			if(h.defPara){
-				_href+=(_href.charAt(_href.length-1)=="&")?h.defPara:"&"+h.defPara;
+				if(_href.charAt(_href.length-1)=="?"||_href.charAt(_href.length-1)=="&"){
+					_href+=h.defPara;
+				}else {
+					_href+="&"+h.defPara;
+				}
 			}
 		}
 		arguments[0].href=_href;
@@ -727,7 +801,10 @@ var j={
 		if(s){
 			var _src="";
 			if(s.top)_src+=s.top;
-			if(s.src)_src+=arguments[1][s.src];	
+			if(s.src)_src+=arguments[1][s.src];
+			if(s.sign==true&&j.isE(arguments[1][s.src])){
+				return;
+			}
 			var last=_src.lastIndexOf(".");
 			if(s.format){
 				// --> 是否已经有后缀了
@@ -771,7 +848,7 @@ var j={
 		// {number:key,format:{retain,rounding,hexadecimal,scm,interval,fill}}
 		if(n){
 			var num=arguments[1][n.number];
-			if(n.format)num=number_format(num,n.format);
+			if(n.format)num=j.number_format(num,n.format);
 			if(!num)num=0;
 			arguments[0].innerText=num;
 		}
@@ -798,30 +875,39 @@ var j={
 	},
 	/**
 	 * 下拉选择
+	 * {select:key(json|null),map:{k:t}|null,def:d,empty:true}
 	 */
 	select:function(){
-		// --> 下拉选择 {select:key,type:map|kv,def(默认选择):d,empty(是否清空):true}
 		var s=eval("("+arguments[2]+")");
-		if(j.isEE(true,s,s.select)){
+		if(s){
 			if(s.empty){
 				arguments[0].innerHTML="";
 			}
-			var options=arguments[1][s.select];
-			if(s.type){
-				if(s.type=="map"){
+			if(s.select){
+				var options=arguments[1][s.select];
+			}
+			if(!options){
+				options=arguments[1];
+			}
+			if(!options){
+				console.warn("select 没有找到数据");
+				return;
+			}
+			if(options instanceof Array){
+				for(var key in s.map){
 					for (var i = 0; i < options.length; i++) {
 						var option=document.createElement("option");
-						option.innerText=options[i][s.text];
-						option.setAttribute("value",options[i][s.value]);
+						option.setAttribute("value",options[i][key]);
+						option.innerText=options[i][s.map[key]];
 						arguments[0].appendChild(option);
 					}
-				}else if(s.type=="kv"){
-					for (var op in options) {
-						var option=document.createElement("option");
-						option.innerText=options[op];
-						option.setAttribute("value",op);
-						arguments[0].appendChild(option);
-					}
+				}
+			}else{
+				for(var key in options){
+					var option=document.createElement("option");
+					option.setAttribute("value",key);
+					option.innerText=options[key];
+					arguments[0].appendChild(option);
 				}
 			}
 			// --->选择默认值
@@ -836,7 +922,19 @@ var j={
 			}
 		}
 	},
-	
+	selectName:function(label,field,value){
+		label.setAttribute("name",value);
+		var ops=label.children;
+		var val=field[value];
+		for (var i = 0; i < ops.length; i++) {
+			if(ops[i].value==val){
+				ops[i].setAttribute("selected","selected");
+				break;
+			}else{
+				ops[i].removeAttribute("selected","selected");
+			}
+		}
+	},
 	/**
 	 * 提示
 	 */
@@ -846,10 +944,9 @@ var j={
 	/**
 	 * 设置html 值 这个替换HTML,直接替换不会进行保留
 	 */
-	thml:function(){
-		if(j._undefined(arguments[1])){
-			var div=document.createElement("div").innerHTML=arguments[1];
-			arguments[0].innerHTML=div.innerHTML;
+	html:function(label,html){
+		if(j._undefined(html)){
+			label.innerHTML=html;
 		}
 	},
 	/**
@@ -862,8 +959,10 @@ var j={
 		if(l){
 			// ---> 限制取值的范围
 			var range;
+			var forParent=arguments[1].for_parent;
 			if(l["for"]){
 				range=arguments[1][l["for"]];
+				if(!forParent&&range){forParent=range.for_parent;}
 			}else{
 				range=arguments[1];
 			}
@@ -895,12 +994,19 @@ var j={
 			}else{
 				var timeElement;
 				var CyclicValue;
+				
 				for (var i = 0; i < range.length; ) {
 					timeElement=rendering.cloneNode(true);
 					if(range[i] instanceof Set){
 						CyclicValue=range[i].get(0);
 					}else{
 						CyclicValue=range[i];
+					}
+					CyclicValue.for_index=(i+1);
+					if(forParent){
+						CyclicValue.for_parent=forParent+"."+CyclicValue.for_index;
+					}else{
+						CyclicValue.for_parent=CyclicValue.for_index;
 					}
 					new j_template({element:timeElement,field:CyclicValue,empty:{valeu:true,attr:true}});
 					arguments[0].appendChild(timeElement);
@@ -910,6 +1016,9 @@ var j={
 				}
 			}
 		}
+	},
+	serial:function(label,field,value){
+		eval("("+value+")")(label,field);
 	},
 	auxiliaryLoop:function(field,key,index){
 		var val="";
@@ -940,13 +1049,14 @@ var j={
 	/**
 	 * 限制json 取值域
 	 */
-	domain:function(){
+	domain:function(label,field){
 		// --> j-var 改变原有的json 取值
-		var j=j.getattr(arguments[0],"j-json");
-		if(j)arguments[1]=arguments[1][j];
+		var js=j.getattr(label,"j-json");
+		if(js&&field[js]){ field=field[js]};
+		return field;
 	},
 	/**
-	 * 
+	 *
 	 */
 	switchCase:function(label,value){
 		var _cases=label.children;
@@ -989,7 +1099,7 @@ var j={
 	 * 		key:从json取值的key
 	 * 	}
 	 * }
-	 * 
+	 *
 	 */
 	attr:function(label,field,value){
 		var a=eval("("+value+")");
@@ -1042,12 +1152,12 @@ var j={
 	oneTemplate:function(label,jsonData){
 		new j_template({element:label,field:jsonData,empty:{tv:false,attr:false}});
 	},
-	
+
 };
 
 /**
  * 时间格式化
- * 
+ *
  * @param fmt
  *            你期待格式
  */
@@ -1073,3 +1183,5 @@ if(typeof Date.prototype.format != 'function'){
 		return fmt;
 	}
 }
+
+
