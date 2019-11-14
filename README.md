@@ -19,3 +19,4 @@ This is my mailbox: 17749922376@163.com.
 > t vscode 
 
 > t eclipse 。
+> t ec all
